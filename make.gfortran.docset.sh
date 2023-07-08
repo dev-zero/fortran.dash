@@ -7,6 +7,10 @@
 #   ./make.gfortran.docset.sh 5.1.0
 ###############################################
 
+set -euo pipefail
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 GFORTRAN_VERSION=$1
 : ${GFORTRAN_VERSION:="5.1.0"}
 CONTENTS_DIR=gfortran_${GFORTRAN_VERSION}.docset/Contents/
@@ -64,42 +68,4 @@ EOF
 # Generate index database
 #
 echo "Generate index database"
-python <<EOF
-#!/usr/bin/env python
-
-import os
-import re
-import sqlite3
-from bs4 import BeautifulSoup
-
-conn = sqlite3.connect('${RES_DIR}/docSet.dsidx')
-cur = conn.cursor()
-
-try:
-    cur.execute('DROP TABLE searchIndex;')
-except:
-    pass
-
-cur.execute('CREATE TABLE searchIndex(id INTEGER PRIMARY KEY, name TEXT, '
-            'type TEXT, path TEXT);')
-cur.execute('CREATE UNIQUE INDEX anchor ON searchIndex (name, type, path);')
-
-docpath = '${DOC_DIR}'
-
-page = open(os.path.join(docpath, 'index.html')).read()
-soup = BeautifulSoup(page, 'lxml')
-
-intrinsic = re.compile('toc_Intrinsic-Procedures')
-intrin_procedures = soup.find('a', {'name': intrinsic}).parent.select('li > a')
-
-for tag in intrin_procedures:
-    if tag.code:
-        name = tag.code.text.strip()
-        path = tag.attrs['href'].strip()
-        cur.execute('INSERT OR IGNORE INTO searchIndex(name, type, path)'
-                    ' VALUES (?,?,?)', (name, 'func', path))
-        # print 'name: %s, path: %s' % (name, path)
-
-conn.commit()
-conn.close()
-EOF
+"${SCRIPT_DIR}/generate_index.py" "${RES_DIR}" "${DOC_DIR}"
